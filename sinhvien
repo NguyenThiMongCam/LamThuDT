@@ -1,0 +1,389 @@
+
+import tkinter as tk
+from tkinter import ttk, messagebox
+from database import get_connection
+
+
+class SinhVien:
+
+    def __init__(self, root):
+        self.root = root
+        self.selected_id = None
+
+        self.frame = tk.Frame(root)
+        self.frame.pack(fill="both", expand=True)
+
+        self.create_interface()
+        self.load_data()
+
+    def create_interface(self):
+        title = tk.Label(
+            self.frame,
+            text="QUẢN LÝ SINH VIÊN",
+            font=("Arial", 20, "bold")
+        )
+        title.pack(pady=15)
+
+        form = tk.LabelFrame(
+            self.frame,
+            text="Thông tin sinh viên",
+            font=("Arial", 11, "bold"),
+            padx=10,
+            pady=10
+        )
+        form.pack(fill="x", padx=20, pady=10)
+
+        tk.Label(form, text="Mã sinh viên:").grid(row=0, column=0, sticky="w", pady=5)
+        self.mssv = tk.Entry(form, width=30)
+        self.mssv.grid(row=0, column=1, padx=10, pady=5)
+
+        tk.Label(form, text="Họ và tên:").grid(row=0, column=2, sticky="w", pady=5)
+        self.hoten = tk.Entry(form, width=30)
+        self.hoten.grid(row=0, column=3, padx=10, pady=5)
+
+        tk.Label(form, text="Ngày sinh (YYYY-MM-DD):").grid(row=1, column=0, sticky="w", pady=5)
+        self.ngaysinh = tk.Entry(form, width=30)
+        self.ngaysinh.grid(row=1, column=1, padx=10, pady=5)
+
+        tk.Label(form, text="Giới tính:").grid(row=1, column=2, sticky="w", pady=5)
+        self.gioitinh = ttk.Combobox(
+            form,
+            values=["Nam", "Nữ", "Khác"],
+            width=27,
+            state="readonly"
+        )
+        self.gioitinh.grid(row=1, column=3, padx=10, pady=5)
+
+        tk.Label(form, text="Số điện thoại:").grid(row=2, column=0, sticky="w", pady=5)
+        self.sdt = tk.Entry(form, width=30)
+        self.sdt.grid(row=2, column=1, padx=10, pady=5)
+
+        tk.Label(form, text="Email:").grid(row=2, column=2, sticky="w", pady=5)
+        self.email = tk.Entry(form, width=30)
+        self.email.grid(row=2, column=3, padx=10, pady=5)
+
+        tk.Label(form, text="Địa chỉ:").grid(row=3, column=0, sticky="w", pady=5)
+        self.diachi = tk.Entry(form, width=30)
+        self.diachi.grid(row=3, column=1, padx=10, pady=5)
+
+        buttons = tk.Frame(self.frame)
+        buttons.pack(pady=10)
+
+        tk.Button(
+            buttons, text="Thêm",
+            width=12, command=self.add_student
+        ).grid(row=0, column=0, padx=5)
+
+        tk.Button(
+            buttons, text="Sửa",
+            width=12, command=self.update_student
+        ).grid(row=0, column=1, padx=5)
+
+        tk.Button(
+            buttons, text="Xóa",
+            width=12, command=self.delete_student
+        ).grid(row=0, column=2, padx=5)
+
+        tk.Button(
+            buttons, text="Làm mới",
+            width=12, command=self.clear_form
+        ).grid(row=0, column=3, padx=5)
+
+        search_frame = tk.Frame(self.frame)
+        search_frame.pack(fill="x", padx=20, pady=10)
+
+        tk.Label(search_frame, text="Tìm kiếm:").pack(side="left")
+
+        self.search_entry = tk.Entry(search_frame, width=35)
+        self.search_entry.pack(side="left", padx=10)
+
+        tk.Button(
+            search_frame,
+            text="Tìm",
+            command=self.search_student
+        ).pack(side="left")
+
+        tk.Button(
+            search_frame,
+            text="Hiển thị tất cả",
+            command=self.load_data
+        ).pack(side="left", padx=5)
+
+        table_frame = tk.Frame(self.frame)
+        table_frame.pack(fill="both", expand=True, padx=20, pady=10)
+
+        columns = (
+            "MaSV", "MSSV", "HoTen", "NgaySinh",
+            "GioiTinh", "SDT", "Email", "DiaChi"
+        )
+
+        self.table = ttk.Treeview(
+            table_frame,
+            columns=columns,
+            show="headings"
+        )
+
+        headings = {
+            "MaSV": "Mã",
+            "MSSV": "MSSV",
+            "HoTen": "Họ và tên",
+            "NgaySinh": "Ngày sinh",
+            "GioiTinh": "Giới tính",
+            "SDT": "Số điện thoại",
+            "Email": "Email",
+            "DiaChi": "Địa chỉ"
+        }
+
+        for col in columns:
+            self.table.heading(col, text=headings[col])
+            self.table.column(col, width=120, anchor="center")
+
+        scrollbar = ttk.Scrollbar(
+            table_frame,
+            orient="vertical",
+            command=self.table.yview
+        )
+
+        self.table.configure(yscrollcommand=scrollbar.set)
+
+        self.table.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        self.table.bind(
+            "<<TreeviewSelect>>",
+            self.select_student
+        )
+
+    def load_data(self):
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT MaSV, MSSV, HoTen, NgaySinh,
+                       GioiTinh, SDT, Email, DiaChi
+                FROM SinhVien
+            """)
+
+            rows = cursor.fetchall()
+
+            self.table.delete(*self.table.get_children())
+
+            for row in rows:
+                self.table.insert("", "end", values=row)
+
+            cursor.close()
+            conn.close()
+
+        except Exception as e:
+            messagebox.showerror("Lỗi", str(e))
+
+    def get_form_data(self):
+        mssv = self.mssv.get().strip()
+        hoten = self.hoten.get().strip()
+        ngaysinh = self.ngaysinh.get().strip() or None
+        gioitinh = self.gioitinh.get().strip()
+        sdt = self.sdt.get().strip()
+        email = self.email.get().strip()
+        diachi = self.diachi.get().strip()
+
+        if not mssv or not hoten:
+            messagebox.showwarning(
+                "Thông báo",
+                "Vui lòng nhập mã sinh viên và họ tên!"
+            )
+            return None
+
+        return (
+            mssv, hoten, ngaysinh, gioitinh,
+            sdt, email, diachi
+        )
+
+    def add_student(self):
+        data = self.get_form_data()
+
+        if data is None:
+            return
+
+        conn = None
+
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                INSERT INTO SinhVien
+                (MSSV, HoTen, NgaySinh, GioiTinh, SDT, Email, DiaChi)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, data)
+
+            conn.commit()
+
+            messagebox.showinfo("Thành công", "Thêm sinh viên thành công!")
+
+            cursor.close()
+            self.load_data()
+            self.clear_form()
+
+        except Exception as e:
+            messagebox.showerror("Lỗi", str(e))
+
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+
+    def update_student(self):
+        if self.selected_id is None:
+            messagebox.showwarning(
+                "Thông báo",
+                "Vui lòng chọn sinh viên cần sửa!"
+            )
+            return
+
+        data = self.get_form_data()
+
+        if data is None:
+            return
+
+        conn = None
+
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                UPDATE SinhVien
+                SET MSSV=%s, HoTen=%s, NgaySinh=%s,
+                    GioiTinh=%s, SDT=%s, Email=%s, DiaChi=%s
+                WHERE MaSV=%s
+            """, data + (self.selected_id,))
+
+            conn.commit()
+
+            messagebox.showinfo("Thành công", "Cập nhật sinh viên thành công!")
+
+            cursor.close()
+            self.load_data()
+            self.clear_form()
+
+        except Exception as e:
+            messagebox.showerror("Lỗi", str(e))
+
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+
+    def delete_student(self):
+        if self.selected_id is None:
+            messagebox.showwarning(
+                "Thông báo",
+                "Vui lòng chọn sinh viên cần xóa!"
+            )
+            return
+
+        confirm = messagebox.askyesno(
+            "Xác nhận",
+            "Bạn có chắc chắn muốn xóa sinh viên này?"
+        )
+
+        if not confirm:
+            return
+
+        conn = None
+
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute(
+                "DELETE FROM SinhVien WHERE MaSV=%s",
+                (self.selected_id,)
+            )
+
+            conn.commit()
+
+            messagebox.showinfo("Thành công", "Xóa sinh viên thành công!")
+
+            cursor.close()
+            self.load_data()
+            self.clear_form()
+
+        except Exception as e:
+            messagebox.showerror("Lỗi", str(e))
+
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+
+    def search_student(self):
+        keyword = self.search_entry.get().strip()
+
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT MaSV, MSSV, HoTen, NgaySinh,
+                       GioiTinh, SDT, Email, DiaChi
+                FROM SinhVien
+                WHERE MSSV LIKE %s OR HoTen LIKE %s
+            """, (f"%{keyword}%", f"%{keyword}%"))
+
+            rows = cursor.fetchall()
+
+            self.table.delete(*self.table.get_children())
+
+            for row in rows:
+                self.table.insert("", "end", values=row)
+
+            cursor.close()
+            conn.close()
+
+        except Exception as e:
+            messagebox.showerror("Lỗi", str(e))
+
+    def select_student(self, event):
+        selected = self.table.selection()
+
+        if not selected:
+            return
+
+        values = self.table.item(selected[0], "values")
+
+        self.selected_id = values[0]
+
+        self.mssv.delete(0, tk.END)
+        self.mssv.insert(0, values[1])
+
+        self.hoten.delete(0, tk.END)
+        self.hoten.insert(0, values[2])
+
+        self.ngaysinh.delete(0, tk.END)
+        self.ngaysinh.insert(0, values[3] or "")
+
+        self.gioitinh.set(values[4] or "")
+
+        self.sdt.delete(0, tk.END)
+        self.sdt.insert(0, values[5] or "")
+
+        self.email.delete(0, tk.END)
+        self.email.insert(0, values[6] or "")
+
+        self.diachi.delete(0, tk.END)
+        self.diachi.insert(0, values[7] or "")
+
+    def clear_form(self):
+        self.selected_id = None
+
+        self.mssv.delete(0, tk.END)
+        self.hoten.delete(0, tk.END)
+        self.ngaysinh.delete(0, tk.END)
+        self.gioitinh.set("")
+        self.sdt.delete(0, tk.END)
+        self.email.delete(0, tk.END)
+        self.diachi.delete(0, tk.END)
+
+        self.search_entry.delete(0, tk.END)
+
+        for item in self.table.selection():
+            self.table.selection_remove(item)
